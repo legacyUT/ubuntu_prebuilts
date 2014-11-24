@@ -1,0 +1,151 @@
+#!/bin/bash -e
+#
+# Copyright 2014 Canonical Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# prepare ubuntu packages for build [-c <channel_name>] [-v <version>]
+
+SCRIPT_NAME=$(basename $0)
+[ -z $DEBUG ] && DEBUG=0
+# default channel
+DEFAULT_CHANNEL="vivid-proposed"
+# DEFAULT_CHANNEL="ubuntu-rtm/devel"
+
+# set default values if not defined globaly
+[ -z $RELEASE_CHANNEL ] && RELEASE_CHANNEL=$DEFAULT_CHANNEL
+[ -z $DEVICE ] && DEVICE="krillin"
+[ -z $UDF_DOWNLOAD_CACHE ] && UDF_DOWNLOAD_CACHE="~/.cache/ubuntuimages"
+[ -z $FORCE_DOWNLOAD ] && FORCE_DOWNLOAD=0
+
+print_usage() {
+     echo -e "Usage:"
+     echo -e "$SCRIPT_NAME [ -c <channel_name>] [ -v <release version>] [-h]\n"
+     echo -e "\t-h, --help               \tthis message"
+     echo -e "\t-c, --channel <name>     \tname of the channel to be used default is set to: $DEFAULT_CHANNEL"
+     echo -e "\t-v, --version <version>  \trelease version to download, default version is set to latest"
+}
+
+download_file() {
+    [ "$DEBUG" == "1" ] && echo "download_file($1, $2)"
+    DOWNLOAD_URL=$1
+    FILENAME=$2
+    TARGET_SIZE=$3
+    SIZE=1
+    # check if file should be downloaded at all
+    FILE_SIZE=$(ls -al $2 | awk '{ print $5}') 2>/dev/null
+    [ "$DEBUG" == "1" ] && echo "comparing sizes $FILE_SIZE and $TARGET_SIZE"
+    if [[ ! $FORCE_DOWNLOAD == 1 ]] && [[ $FILE_SIZE -ge $TARGET_SIZE ]]; then
+        echo "Skipping download of $(basename $FILENAME), already downloaded"
+        return
+    fi
+    # check downloaded file size, this often fails, so retry. Expected size is TARGET_SIZE
+    while [[ $TARGET_SIZE -gt $SIZE ]]
+    do
+        mkdir -p $(dirname $FILENAME)
+        curl $DOWNLOAD_URL > $FILENAME
+        SIZE=$(ls -la $FILENAME | awk '{ print $5}')
+        echo "Downloaded file has size: $SIZE"
+    done
+}
+
+download_channel() {
+    BASE_SERVER_URL="http://system-image.ubuntu.com"
+    CHANNEL_URL="$BASE_SERVER_URL/ubuntu-touch/$1/$2/index.json"
+    echo "Selected channel: $CHANNEL_URL"
+    if [ ! -z $3 ]; then
+        VERSION_MATCH="and data['images'][i]['version'] == $3"
+        [ "$DEBUG" == "1" ] && echo "Using version match:$VERSION_MATCH"
+    fi
+    CHANNEL_PACKAGES=$(curl -s $CHANNEL_URL | python -c "import json
+import sys
+data =  json.load(sys.stdin)
+count = len(data['images'])
+for i in range(count -1,0,-1):
+    if data['images'][i]['type'] == 'full' $VERSION_MATCH:
+        pCount = len(data['images'][i]['files'])
+        for ii in range(0, pCount):
+            print data['images'][i]['files'][ii]['size'], data['images'][i]['files'][ii]['path']
+        break")
+    
+    if [ -z "$CHANNEL_PACKAGES" ]; then
+        echo -e "\nDefied combination of channel and version was not found"
+        return
+    else
+        echo -e "\nChannel packages:\n$CHANNEL_PACKAGES\n"
+    fi
+    unset DOWNLOADED_ROOTFS_PACKAGES
+    unset DOWNLOADED_CUSTOM_PACKAGES
+    while read -r line; do
+        SIZE=$( echo $line | awk '{ print $1}')
+        PACKAGE=$(echo $line | awk '{ print $2}')
+        PACKAGE=${PACKAGE#?} # remove first "/"
+        if [[ $(basename $PACKAGE) == ubuntu* ]] \
+            || [[ $(basename $PACKAGE) == version* ]]; then
+            download_file $BASE_SERVER_URL/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
+            DOWNLOADED_ROOTFS_PACKAGES+=" $UDF_DOWNLOAD_CACHE/$PACKAGE"
+        elif [[ $(basename $PACKAGE) == custom* ]]; then
+            download_file $BASE_SERVER_URL/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
+            DOWNLOADED_CUSTOM_PACKAGES+=" $UDF_DOWNLOAD_CACHE/$PACKAGE"
+        fi
+    done <<< "$CHANNEL_PACKAGES"
+    echo -e ""
+}
+
+# Parse parameters
+while [ ! -z $1 ];
+do
+    if [[ $1 == "-h" || $1 == "--help" ]]; then
+        print_usage
+        return
+    elif [[ "$1" == "-v" || "$1"  == "--version" ]]; then
+        shift
+        # is the value number or channel?
+        if [ "$1" -eq "$1" ] 2>/dev/null; then
+            VERSION=$1
+            echo "Looking for version $VERSION"
+        else
+            echo "Passed version is not number"
+            print_usage
+            return
+        fi
+    elif [[ "$1" == "-c" || "$1" == "--channel" ]]; then
+        shift
+        RELEASE_CHANNEL=$1
+        [ "$DEBUG" == "1" ] && echo "Using release channel $RELEASE_CHANNEL"
+    else
+        echo "Unknown parameter: $1"
+        echo "Use -h to show help"
+        return
+    fi
+    shift
+done
+
+echo -e "Channel is set to: $RELEASE_CHANNEL\n\n"
+[ -z $VERSION ] && echo "Looking for latest release"
+
+# get channel packages
+download_channel $RELEASE_CHANNEL $DEVICE $VERSION
+
+if [ -z "$CHANNEL_PACKAGES" ]; then
+    echo "check version and channel and try again"
+    return
+fi
+
+# prepare exports for build
+# MX4 has currently one system partition for rootfs,custom and version
+unset UBUNTU_ROOTFS_PACKAGES
+export UBUNTU_ROOTFS_PACKAGES="$DOWNLOADED_ROOTFS_PACKAGES $DOWNLOADED_CUSTOM_PACKAGES"
+echo "Ubuntu packages are prepared for build"
+
