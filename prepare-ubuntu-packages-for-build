@@ -21,11 +21,13 @@ SCRIPT_NAME=$(basename $0)
 [ -z $DEBUG ] && DEBUG=0
 # default channel
 DEFAULT_CHANNEL="vivid-proposed"
+DEFAULT_SERVER_URL="http://system-image.ubuntu.com"
 # DEFAULT_CHANNEL="ubuntu-rtm/devel"
 
 # set default values if not defined globaly
+[ -z $UDF_SERVER_URL ] && UDF_SERVER_URL=$DEFAULT_SERVER_URL
 [ -z $RELEASE_CHANNEL ] && RELEASE_CHANNEL=$DEFAULT_CHANNEL
-[ -z $DEVICE ] && DEVICE="krillin"
+[ -z $DEVICE ] && DEVICE="mako"
 [ -z $UDF_DOWNLOAD_CACHE ] && UDF_DOWNLOAD_CACHE="$HOME/.cache/ubuntuimages"
 [ -z $FORCE_DOWNLOAD ] && FORCE_DOWNLOAD=0
 
@@ -61,8 +63,7 @@ download_file() {
 }
 
 download_channel() {
-    BASE_SERVER_URL="http://system-image.ubuntu.com"
-    CHANNEL_URL="$BASE_SERVER_URL/ubuntu-touch/$1/$2/index.json"
+    CHANNEL_URL="$UDF_SERVER_URL/ubuntu-touch/$1/$2/index.json"
     echo "Selected channel: $CHANNEL_URL"
     if [ ! -z $3 ]; then
         VERSION_MATCH="and data['images'][i]['version'] == $3"
@@ -88,15 +89,25 @@ for i in range(count -1,0,-1):
     unset DOWNLOADED_ROOTFS_PACKAGES
     unset DOWNLOADED_CUSTOM_PACKAGES
     while read -r line; do
+        unset DOWNLOAD_SERVER
         SIZE=$( echo $line | awk '{ print $1}')
         PACKAGE=$(echo $line | awk '{ print $2}')
-        PACKAGE=${PACKAGE#?} # remove first "/"
+        if [[ $PACKAGE == /* ]]; then
+            PACKAGE=${PACKAGE#?} # remove first "/"
+        else
+            # strip name to server and file path+name
+            PROTO="$(echo $PACKAGE | grep :// | sed -e's,^\(.*://\).*,\1,g')"
+            URL="$(echo ${PACKAGE/$PROTO/})"
+            HOST="$(echo ${URL/} | cut -d/ -f1)"
+            PACKAGE="$(echo $URL | grep / | cut -d/ -f2-)"
+            DOWNLOAD_SERVER=$PROTO$HOST
+        fi
         if [[ $(basename $PACKAGE) == ubuntu* ]] \
             || [[ $(basename $PACKAGE) == version* ]]; then
-            download_file $BASE_SERVER_URL/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
+            download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
             DOWNLOADED_ROOTFS_PACKAGES+=" $UDF_DOWNLOAD_CACHE/$PACKAGE"
         elif [[ $(basename $PACKAGE) == custom* ]]; then
-            download_file $BASE_SERVER_URL/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
+            download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
             DOWNLOADED_CUSTOM_PACKAGES+=" $UDF_DOWNLOAD_CACHE/$PACKAGE"
         fi
     done <<< "$CHANNEL_PACKAGES"
