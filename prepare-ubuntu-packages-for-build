@@ -93,6 +93,7 @@ for i in range(count -1,0,-1):
         SIZE=$( echo $line | awk '{ print $1}')
         PACKAGE=$(echo $line | awk '{ print $2}')
         if [[ $PACKAGE == /* ]]; then
+            DOWNLOAD_SERVER=$UDF_SERVER_URL
             PACKAGE=${PACKAGE#?} # remove first "/"
         else
             # strip name to server and file path+name
