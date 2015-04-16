@@ -26,17 +26,21 @@ DEFAULT_SERVER_URL="http://system-image.ubuntu.com"
 
 # set default values if not defined globaly
 [ -z $UDF_SERVER_URL ] && UDF_SERVER_URL=$DEFAULT_SERVER_URL
-[ -z $RELEASE_CHANNEL ] && RELEASE_CHANNEL=$DEFAULT_CHANNEL
-[ -z $DEVICE ] && DEVICE="mako"
+USING_CHANNEL=$DEFAULT_CHANNEL
+[ -n "$RELEASE_CHANNEL" ] && USING_CHANNEL=$RELEASE_CHANNEL
+USING_DEVICE="m75"
+[ -n "$DEVICE" ] && USING_DEVICE=$DEVICE
 [ -z $UDF_DOWNLOAD_CACHE ] && UDF_DOWNLOAD_CACHE="$HOME/.cache/ubuntuimages"
 [ -z $FORCE_DOWNLOAD ] && FORCE_DOWNLOAD=0
 
 print_usage() {
+     echo -e "Download packages needed to create flash tool images"
      echo -e "Usage:"
-     echo -e "$SCRIPT_NAME [ -c <channel_name>] [ -v <release version>] [-h]\n"
-     echo -e "\t-h, --help               \tthis message"
-     echo -e "\t-c, --channel <name>     \tname of the channel to be used default is set to: $DEFAULT_CHANNEL"
-     echo -e "\t-v, --version <version>  \trelease version to download, default version is set to latest"
+     echo -e "$SCRIPT_NAME [ -c <channel_name>] [ -v <release version>] [-h] [ROOTFS/CUSTOM]\n"
+     echo -e "\t-h, --help                 \tthis message"
+     echo -e "\t-d, --device <device name> \tchange default used device ($DEVICE) in channel"
+     echo -e "\t-c, --channel <name>       \tname of the channel to be used default is set to: $DEFAULT_CHANNEL"
+     echo -e "\t-v, --version <version>    \trelease version to download, default version is set to latest"
 }
 
 download_file() {
@@ -60,12 +64,14 @@ download_file() {
         SIZE=$(ls -la $FILENAME | awk '{ print $5}')
         echo "Downloaded file has size: $SIZE"
     done
+    curl $DOWNLOAD_URL.asc > $FILENAME.asc
 }
 
 download_channel() {
     CHANNEL_URL="$UDF_SERVER_URL/ubuntu-touch/$1/$2/index.json"
     echo "Selected channel: $CHANNEL_URL"
-    if [ ! -z $3 ]; then
+    unset VERSION_MATCH
+    if [ -n "$3" ]; then
         VERSION_MATCH="and data['images'][i]['version'] == $3"
         [ "$DEBUG" == "1" ] && echo "Using version match:$VERSION_MATCH"
     fi
@@ -79,7 +85,7 @@ for i in range(count -1,0,-1):
         for ii in range(0, pCount):
             print data['images'][i]['files'][ii]['size'], data['images'][i]['files'][ii]['path']
         break")
-    
+
     if [ -z "$CHANNEL_PACKAGES" ]; then
         echo -e "\nDefied combination of channel and version was not found"
         return
@@ -116,7 +122,8 @@ for i in range(count -1,0,-1):
 }
 
 # Parse parameters
-while [ ! -z $1 ];
+unset VERSION
+while [ -n "$1" ];
 do
     if [[ $1 == "-h" || $1 == "--help" ]]; then
         print_usage
@@ -134,8 +141,12 @@ do
         fi
     elif [[ "$1" == "-c" || "$1" == "--channel" ]]; then
         shift
-        RELEASE_CHANNEL=$1
-        [ "$DEBUG" == "1" ] && echo "Using release channel $RELEASE_CHANNEL"
+        USING_CHANNEL=$1
+        [ "$DEBUG" == "1" ] && echo "Using release channel $USING_CHANNEL"
+    elif [[ "$1" == "-d" || "$1" == "--device" ]]; then
+        shift
+        [ "$DEBUG" == "1" ] && echo "Using device $1"
+        USING_DEVICE=$1
     else
         echo "Unknown parameter: $1"
         echo "Use -h to show help"
@@ -144,11 +155,13 @@ do
     shift
 done
 
-echo -e "Channel is set to: $RELEASE_CHANNEL\n\n"
+echo -e "Channel is set to: $USING_CHANNEL\n\n"
 [ -z $VERSION ] && echo "Looking for latest release"
 
 # get channel packages
-download_channel $RELEASE_CHANNEL $DEVICE $VERSION
+unset CHANNEL_PACKAGES
+download_channel $USING_CHANNEL $USING_DEVICE $VERSION
+unset USING_CHANNEL
 
 if [ -z "$CHANNEL_PACKAGES" ]; then
     echo "check version and channel and try again"
@@ -156,8 +169,11 @@ if [ -z "$CHANNEL_PACKAGES" ]; then
 fi
 
 # prepare exports for build
-# MX4 has currently one system partition for rootfs,custom and version
+# Arale has one system partition for rootfs,custom and version
 unset UBUNTU_ROOTFS_PACKAGES
 export UBUNTU_ROOTFS_PACKAGES="$DOWNLOADED_ROOTFS_PACKAGES $DOWNLOADED_CUSTOM_PACKAGES"
+if [ -n "$ROOTFS_PACKAGES" ]; then
+    echo "export UBUNTU_ROOTFS_PACKAGES=\"$UBUNTU_ROOTFS_PACKAGES\"" > $ROOTFS_PACKAGES
+fi
 echo "Ubuntu packages are prepared for build"
 

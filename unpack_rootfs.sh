@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+if [ -n $2 -a -f $2 ]; then
+    source $2
+fi
 if [[ ! -z $UBUNTU_ROOTFS_PACKAGES ]]; then
     rm -rf $1/* >/dev/null
     rm -f $1.content >/dev/null
-    rm -f $2 >/dev/null
     mkdir -p $1 >/dev/null
     for package in $UBUNTU_ROOTFS_PACKAGES
     do
         if [ -f $package ]; then
+            echo "Unpacking $package"
             tar --numeric-owner --strip-components=1 --exclude=system/dev/* -xvvf $package --directory $1 >> $1.content
         fi
     done
