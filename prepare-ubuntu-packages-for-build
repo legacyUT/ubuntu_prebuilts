@@ -50,7 +50,7 @@ download_file() {
     TARGET_SIZE=$3
     SIZE=1
     # check if file should be downloaded at all
-    FILE_SIZE=$(ls -al $2 | awk '{ print $5}') 2>/dev/null
+    FILE_SIZE=$(du -b $FILENAME | awk '{ print $1}') 2>/dev/null
     [ "$DEBUG" == "1" ] && echo "comparing sizes $FILE_SIZE and $TARGET_SIZE"
     if [[ ! $FORCE_DOWNLOAD == 1 ]] && [[ $FILE_SIZE -ge $TARGET_SIZE ]]; then
         echo "Skipping download of $(basename $FILENAME), already downloaded"
@@ -61,7 +61,7 @@ download_file() {
     do
         mkdir -p $(dirname $FILENAME)
         curl $DOWNLOAD_URL > $FILENAME
-        SIZE=$(ls -la $FILENAME | awk '{ print $5}')
+        SIZE=$(du -b $FILENAME | awk '{ print $1}')
         echo "Downloaded file has size: $SIZE"
     done
     curl $DOWNLOAD_URL.asc > $FILENAME.asc
