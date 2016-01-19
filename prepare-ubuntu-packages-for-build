@@ -41,6 +41,7 @@ print_usage() {
      echo -e "\t-d, --device <device name> \tchange default used device ($DEVICE) in channel"
      echo -e "\t-c, --channel <name>       \tname of the channel to be used default is set to: $DEFAULT_CHANNEL"
      echo -e "\t-v, --version <version>    \trelease version to download, default version is set to latest"
+     echo -e "\t--full                     \tdownload all packages for release, inluding device one"
 }
 
 download_file() {
@@ -110,7 +111,8 @@ for i in range(count -1,0,-1):
             DOWNLOAD_SERVER=$PROTO$HOST
         fi
         if [[ $(basename $PACKAGE) == ubuntu* ]] \
-            || [[ $(basename $PACKAGE) == version* ]]; then
+            || [[ $(basename $PACKAGE) == version* ]]\
+            || [[ $(basename $PACKAGE) == device* ]] && [[ "$DOWNLOAD_DEVICE" == "1" ]]; then
             download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
             DOWNLOADED_ROOTFS_PACKAGES+=" $UDF_DOWNLOAD_CACHE/$PACKAGE"
         elif [[ $(basename $PACKAGE) == custom* ]]; then
@@ -147,6 +149,8 @@ do
         shift
         [ "$DEBUG" == "1" ] && echo "Using device $1"
         USING_DEVICE=$1
+    elif [[ "$1" == "--full" ]]; then
+        DOWNLOAD_DEVICE="1"
     else
         echo "Unknown parameter: $1"
         echo "Use -h to show help"
