@@ -72,22 +72,22 @@ download_channel() {
     echo "Selected channel: $CHANNEL_URL"
     unset VERSION_MATCH
     if [ -n "$3" ]; then
-        VERSION_MATCH="and data['images'][i]['version'] == $3"
+        VERSION_MATCH="and i['version'] == $3"
         [ "$DEBUG" == "1" ] && echo "Using version match:$VERSION_MATCH"
     fi
     CHANNEL_PACKAGES=$(curl -s $CHANNEL_URL | python -c "import json
 import sys
 data =  json.load(sys.stdin)
 count = len(data['images'])
-for i in range(count -1,0,-1):
-    if data['images'][i]['type'] == 'full' $VERSION_MATCH:
-        pCount = len(data['images'][i]['files'])
+for i in data['images']:
+    if i['type'] == 'full' $VERSION_MATCH:
+        pCount = len(i['files'])
         for ii in range(0, pCount):
-            print data['images'][i]['files'][ii]['size'], data['images'][i]['files'][ii]['path']
+            print i['files'][ii]['size'], i['files'][ii]['path']
         break")
 
     if [ -z "$CHANNEL_PACKAGES" ]; then
-        echo -e "\nDefied combination of channel and version was not found"
+        echo -e "\nDefined combination of channel and version was not found"
         return
     else
         echo -e "\nChannel packages:\n$CHANNEL_PACKAGES\n"
