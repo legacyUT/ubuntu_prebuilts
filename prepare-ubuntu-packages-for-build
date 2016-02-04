@@ -79,7 +79,7 @@ download_channel() {
 import sys
 data =  json.load(sys.stdin)
 count = len(data['images'])
-for i in data['images']:
+for i in reversed(data['images']):
     if i['type'] == 'full' $VERSION_MATCH:
         pCount = len(i['files'])
         for ii in range(0, pCount):
@@ -181,5 +181,5 @@ if [ -n "$ROOTFS_PACKAGES" ]; then
     echo "export UBUNTU_ROOTFS_PACKAGES=\"$UBUNTU_ROOTFS_PACKAGES\"" > $ROOTFS_PACKAGES
 fi
 echo "UBUNTU_ROOTFS_PACKAGES=\"${UBUNTU_ROOTFS_PACKAGES}\""
-echo "Ubuntu packages are prepared for build"
+echo -e "\nUbuntu packages are prepared for build\n"
 
