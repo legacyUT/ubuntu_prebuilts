@@ -116,8 +116,12 @@ for i in reversed(data['images']):
             download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
             DOWNLOADED_ROOTFS_PACKAGES+="$UDF_DOWNLOAD_CACHE/$PACKAGE "
         elif [[ $(basename $PACKAGE) == custom* ]]; then
-            download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
-            DOWNLOADED_CUSTOM_PACKAGES+="$UDF_DOWNLOAD_CACHE/$PACKAGE "
+            if [ -n "$UBUNTU_CUSTOM_PACKAGES"  ]; then
+                DOWNLOADED_CUSTOM_PACKAGES+="$UBUNTU_CUSTOM_PACKAGES "
+            else
+                download_file $DOWNLOAD_SERVER/$PACKAGE $UDF_DOWNLOAD_CACHE/$PACKAGE $SIZE
+                DOWNLOADED_CUSTOM_PACKAGES+="$UDF_DOWNLOAD_CACHE/$PACKAGE "
+            fi
         fi
     done <<< "$CHANNEL_PACKAGES"
     echo -e ""
